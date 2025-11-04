@@ -1,7 +1,7 @@
 import numpy as np
 from dataclasses import dataclass, field
 from typing import Tuple, List, Optional, Dict, Any
-from base import *
+from .base import *
 import timeit
 from scipy.sparse.linalg import LinearOperator, cg
 

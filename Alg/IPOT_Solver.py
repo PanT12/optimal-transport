@@ -1,5 +1,5 @@
 import numpy as np
-from base import *
+from .base import *
 import timeit
 
 

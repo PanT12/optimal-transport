@@ -1,4 +1,4 @@
-from base import *
+from Alg.base import *
 import timeit
 import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, cg

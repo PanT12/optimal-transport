@@ -1,5 +1,5 @@
 import numpy as np
-from base import *
+from .base import *
 from scipy.special import logsumexp
 from math import ceil, log
 import timeit

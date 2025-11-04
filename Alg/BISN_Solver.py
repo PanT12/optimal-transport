@@ -1,6 +1,6 @@
 import numpy as np
 from copy import deepcopy
-from base import *
+from .base import *
 import math
 import timeit
 import scipy.sparse as sp

@@ -1,7 +1,7 @@
 import ot
 from Alg.EOT_solver import *
 import timeit
-
+import os
 
 
 def _round_to_marginals(X, r, c):
@@ -156,15 +156,3 @@ coldiff4 = np.linalg.norm(b - X4.sum(axis=0))
 print("row difference before rounding is ", np.linalg.norm(a - X4.sum(axis=1)))
 print("col difference before rounding is ", np.linalg.norm(b - X4.sum(axis=0)))
 print("GCG OT time is ", t4)
-
-
-
-
-
-# for latex
-for a in rho_list:
-    if str(a) in loaded:
-        cg_time, _, newton_iter, total_time, gap = cg_iter_stats_ori(str(a))
-        # print(f"{a}: CG iters per Newton iter = {mean_cg:.1f}({std_cg:.1f})")
-        # print(f"{a}: CG time per Newton iter = {mean_time:.2f}({std_time:.2f}) seconds")
-        print(f"{a} & {newton_iter} & {cg_time:.2f} & {total_time:.2f} & {gap:.2e}")

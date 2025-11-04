@@ -2,7 +2,7 @@ import numpy as np
 import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, cg
 from scipy.optimize import line_search
-from base import *
+from .base import *
 import timeit
 
 
