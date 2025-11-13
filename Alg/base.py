@@ -109,6 +109,7 @@ class optimal_transport:
         return X2
 
     def kkt_err(self, X, g, f=None):
+        # g: (n, 1) f: (m, 1)
         if f is None:
             f = np.min(self.C - g[None, :], axis=1)
         Delta_p1 = (np.linalg.norm(X.sum(axis=0) - self.b)) / (1 + self.bnorm)
@@ -127,95 +128,8 @@ class optimal_transport:
 
     def KL_divergence(self, X):
         X_feasible = self._round_to_marginals(X, self.a, self.b)
+        # row_diff = np.linalg.norm(X_feasible.sum(axis=1) - self.a)
+        # col_diff = np.linalg.norm(X_feasible.sum(axis=0) - self.b)
+        D = rel_entr(X_feasible, X)
+        return np.sum(D[np.isfinite(D)])
         return np.sum(rel_entr(X_feasible, X))
-
-
-def congujate_gradient(X, P, c, eta, cg_iter=1000, lam=0.0):
-    X_sp, P_sp = True, True
-    cs = X.sum(axis=0)
-    X = sparse.coo_matrix(X).tocsr()
-    P = sparse.coo_matrix(P).tocsr()
-
-    # 稀疏：建议用 CSR 提升乘法性能；稠密：保持 ndarray
-    # if X_sp and not sparse.isspmatrix_csr(X):
-    #     X = X.tocsr()
-    # if P_sp and not sparse.isspmatrix_csr(P):
-    #     P = P.tocsr()
-
-    # X_sp, P_sp = False, False
-    XT = X.T if not X_sp else X.transpose()  # 稀疏转置开销低
-
-    def H_mv(v: np.ndarray) -> np.ndarray:
-        # term1 = diag(column_sum) @ v
-        term1 = cs * v  # (n,)
-
-        # Pv = P @ v
-        Pv = P.dot(v) if P_sp else np.dot(P, v)  # (m,)
-
-        # XtPv = X^T @ (P v)
-        XtPv = XT.dot(Pv) if sparse.issparse(XT) else np.dot(XT, Pv)  # (n,)
-
-        Hv = (term1 - XtPv) / eta
-        Hv = Hv + lam * v
-        return Hv
-
-    r = c.copy()
-    p = r.copy()
-    x = np.zeros_like(c)
-    rdotr = np.dot(r, r)
-    residual_tol = 1e-6
-    iter = 0
-    for i in range(cg_iter):
-        z = H_mv(p)              # A p
-        pz = np.dot(p, z)
-        if pz <= 0.0:
-            print("decrease", i)
-            return -c
-
-        v = rdotr / pz
-        x += v * p
-        r -= v * z
-
-        new_rdotr = np.dot(r, r)
-        if np.sqrt(new_rdotr) < residual_tol * lam:
-            break
-
-        mu = new_rdotr / rdotr
-        p = r + mu * p
-        rdotr = new_rdotr
-        iter += 1
-
-    return x, iter
-
-def Steihaug_congujate_gradient(A, c, delta, cg_iter=4):
-    # solving Ax = c
-    r = np.copy(c)
-    p = np.copy(c)
-    x = np.zeros_like(c)
-    rdotr = np.dot(r, r)
-    residual_tol = min(0.5, np.sqrt(np.linalg.norm(c)))
-    residual_tol = 1e-6
-    for i in range(cg_iter):
-        z = np.dot(A, p)
-        if np.dot(p, z) <= 0:
-            print("decrease", i)
-            d = np.linalg.norm(delta)**2 - np.linalg.norm(x)**2 - np.linalg.norm(p)**2
-            tau = d / (2 * np.dot(x, p))
-            return x + tau * p
-            # return -c
-        v = rdotr / np.dot(p, z)
-        print("v is ", v)
-        x += v * p
-        if np.linalg.norm(x) >= delta:
-            d = np.linalg.norm(delta) ** 2 - np.linalg.norm(x) ** 2 - np.linalg.norm(p) ** 2
-            tau = d / (2 * np.dot(x, p))
-            return x + tau * p
-        r -= v * z
-        newrdotr = np.dot(r, r)
-        mu = newrdotr / rdotr
-        p = r + mu * p
-        rdotr = newrdotr
-        if np.sqrt(rdotr) < residual_tol * np.linalg.norm(c):
-            # print("iter is ", i)
-            break
-    return x
