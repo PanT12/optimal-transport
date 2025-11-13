@@ -6,26 +6,6 @@ from Alg.Algorithm_Import import *
 
 def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix="", title_suffix="",
                      downsample_map=None, default_stride=1, solid_algos=None, figure_show=True):
-    """
-    聚合 CSV 并画两张图（误差-迭代，误差-时间）。
-    支持按算法下采样：downsample_map = {"EG-OT":100, "Classic-Sinkhorn":50, ...}
-    其余算法使用 default_stride（默认 1 = 不下采样）。
-
-    参数
-    ----
-    data : dict[str, list[pd.DataFrame]]
-        load_results(...) 的返回 {algo: [df_trial0, df_trial1, ...]}
-    ylog : bool
-        y 轴是否取对数
-    show_bands : bool
-        是否显示均值 ± 标准差阴影带
-    title_suffix : str
-        标题后缀
-    downsample_map : dict[str, int] | None
-        每个算法的下采样步长（每 k 个 iter 取一次）
-    default_stride : int
-        未在 downsample_map 指定的算法使用的步长（默认 1）
-    """
     if not data:
         print("No data to plot.")
         return
@@ -167,8 +147,8 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
 
 
 # ===== 固定超参 =====
-m = n = 1000
-cost_matrix_norm = "Square"  # "Square" or "Uniform" or "Absolute"
+m = n = 5000
+cost_matrix_norm = "Uniform"  # "Square" or "Uniform" or "Absolute"
 stepsize = 1e-2
 tol = 1e-7
 seed = 41

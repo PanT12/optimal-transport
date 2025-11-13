@@ -3,40 +3,18 @@ from skimage.transform import resize
 import random
 import torch
 import numpy as np
-from Alg.Algorithm_Import import Gurobisolver
-
-import ot
+# import ot
 import sys
 from pathlib import Path
+from skimage import io, color
+from skimage.transform import resize
+import matplotlib.pyplot as plt
+import numpy as np
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import MinMaxScaler
 
-# ===== 辅助函数（最小增补，不影响原有主流程）=====
-def load_figures(pair_id=None, src_path=None, tgt_path=None, size_hw=(256, 256), show=True):
-    """
-    载入一对图像（RGB），按给定尺寸缩放，并可视化显示。
 
-    参数：
-    - pair_id: 可选的示例编号（若提供，将使用默认演示图片路径）
-    - src_path, tgt_path: 显式提供的源/目标图像路径（优先于 pair_id）
-    - size_hw: 目标尺寸 (H, W)
-    - show: 是否显示原始两幅图
-
-    返回：
-    - src_rgb, tar_rgb: 缩放后的 RGB numpy 数组，范围 [0,1]
-    - src_lab, tar_lab: 转换到 Lab 空间后的图像
-    - src_lumi, tar_lumi: L 通道 (H, W)
-    - src_ab, tar_ab: ab 通道展平后的二维数组 (H*W, 2)，按列优先顺序
-    """
-    from skimage import io, color
-    from skimage.transform import resize
-    import numpy as np
-    import matplotlib.pyplot as plt
-
-    if src_path is None or tgt_path is None:
-        # 使用默认 demo 图像（与现脚本顶部示例一致）
-        default_src = r"C:\Users\Andy Li\OneDrive - CUHK-Shenzhen\桌面\LGU\Research\Optimal Transport\New_Sparse\OT\ot_9.12\pexelA-0.png"
-        default_tgt = r"C:\Users\Andy Li\OneDrive - CUHK-Shenzhen\桌面\LGU\Research\Optimal Transport\New_Sparse\OT\ot_9.12\pexelB-0.png"
-        src_path = src_path or default_src
-        tgt_path = tgt_path or default_tgt
+def load_figures(src_path, tgt_path, size_hw=(256, 256), show=True):
 
     m, n = size_hw
     src = io.imread(src_path)
@@ -51,6 +29,7 @@ def load_figures(pair_id=None, src_path=None, tgt_path=None, size_hw=(256, 256),
         axs[0].set_axis_off()
         axs[1].set_axis_off()
         plt.tight_layout()
+        plt.show()
 
     src_lab = color.rgb2lab(src)
     tar_lab = color.rgb2lab(tar)
@@ -60,35 +39,13 @@ def load_figures(pair_id=None, src_path=None, tgt_path=None, size_hw=(256, 256),
     tar_lumi = tar_lab[:, :, 0]
     tar_ab_img = tar_lab[:, :, 1:]
 
-    # 以列优先展平到 (H*W, 2)
     src_ab = np.reshape(src_ab_img, (-1, 2), order='F')
     tar_ab = np.reshape(tar_ab_img, (-1, 2), order='F')
 
     return src, tar, src_lab, tar_lab, src_lumi, src_ab, tar_lumi, tar_ab
 
 
-def to_lab_kmeans(src_ab, tar_ab, K=128, scale_to_01=True, random_state=0):
-    """
-    在 ab 空间上做 Union-KMeans，返回码本中心、权重 a/b、标签与缩放器，并构造 OT 成本矩阵 C。
-
-    参数：
-    - src_ab, tar_ab: 形状 (N,2) 的 ab 数据
-    - K: 聚类中心数
-    - scale_to_01: 是否先做 [0,1] 归一化再聚类
-    - random_state: KMeans 随机种子
-
-    返回：
-    - centers: (K,2)
-    - a: (K,) 源端归一化计数
-    - b: (K,) 目标端归一化计数
-    - labels_src, labels_tar: 各自像素的簇标签
-    - scaler: 归一化缩放器（若 scale_to_01=False，则返回 None）
-    - C: (K,K) ab 空间的 L2 距离平方成本矩阵
-    """
-    import numpy as np
-    from sklearn.cluster import KMeans
-    from sklearn.preprocessing import MinMaxScaler
-
+def to_lab_kmeans(src_ab, tar_ab, K=128, scale_to_01=True):
     union_ab = np.vstack([src_ab, tar_ab])
     if scale_to_01:
         scaler = MinMaxScaler((0, 1))
@@ -98,20 +55,21 @@ def to_lab_kmeans(src_ab, tar_ab, K=128, scale_to_01=True, random_state=0):
         union_ab_scaled = union_ab
 
     size = src_ab.shape[0]
-    labels = KMeans(n_clusters=K, random_state=random_state, n_init="auto").fit_predict(union_ab_scaled)
-    centers = KMeans(n_clusters=K, random_state=random_state, n_init="auto").fit(union_ab_scaled).cluster_centers_
+    kmeans = KMeans(n_clusters=K, random_state=0, n_init="auto").fit(union_ab_scaled)
+    centers = kmeans.cluster_centers_  # (K, 2)
+    labels = kmeans.labels_  # (2*size,)
 
     labels_src = labels[:size]
     labels_tar = labels[size:]
 
-    a = np.bincount(labels_src, minlength=K).astype(float) + 1e-12
+    a = np.bincount(labels_src, minlength=K).astype(float) + 1e-3
     a /= a.sum()
-    b = np.bincount(labels_tar, minlength=K).astype(float) + 1e-12
+    b = np.bincount(labels_tar, minlength=K).astype(float) + 1e-3
     b /= b.sum()
 
-    # 成本矩阵：两两中心差的 L2 距离平方
-    diff = centers[:, None, :] - centers[None, :, :]
+    diff = centers[:, None, :] - centers[None, :, :]  # (K, K, 2)
     C = np.sum(diff * diff, axis=2)
+    C /= np.max(C)
 
     return centers, a, b, labels_src, labels_tar, scaler, C
 

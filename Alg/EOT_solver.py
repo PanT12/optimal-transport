@@ -1,32 +1,35 @@
+import math
 from Alg.base import *
 import timeit
 import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, cg
 from scipy.special import logsumexp
 from math import ceil
+import warnings
 
 
 class BISNsolver_EOT(optimal_transport):
     def __init__(self, *args, skip_first_stage=False, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cg_tol = 1e-11
+        self.cg_tol = 1e-20
         self.cg_maxit = max(self.m, self.n) * 100
 
         self.argmax = np.argmax(self.a)
 
         self.skip_first_stage = skip_first_stage
 
-    def update_P_X(self, g, fixed_term):
-        exp_term = np.exp((g - np.max(g)) / self.eta)
-        numerator = fixed_term * exp_term
-        row_sum = np.maximum(numerator.sum(axis=1, keepdims=True), 1e-300)
-        P = numerator / row_sum
-        newX = P * self.a[:, None]
-
-        # Z = log_fixed_term + g[None, :]
-        # lse = logsumexp(Z, axis=1, keepdims=True)  # (m,1)
-        # P = np.exp(Z - lse)  # softmax rows
+    def update_P_X(self, g, log_fixed_term):
+        # exp_term = np.exp((g - np.max(g)) / self.eta)
+        # numerator = fixed_term * exp_term
+        # row_sum = np.maximum(numerator.sum(axis=1, keepdims=True), 1e-300)
+        # P = numerator / row_sum
         # newX = P * self.a[:, None]
+
+        u = g / self.eta
+        Z = log_fixed_term + u[None, :]
+        lse = logsumexp(Z, axis=1, keepdims=True)  # (m,1)
+        P = np.exp(Z - lse)  # softmax rows
+        newX = P * self.a[:, None]
         return P, newX
 
     def accelerated_gradient(self, g, log_fixed_term, first_stage_tol, inner_iter, outer_iter, stepsize=1e-1):
@@ -59,12 +62,8 @@ class BISNsolver_EOT(optimal_transport):
             beta = (lam_past - 1.0) / lam
             # gnorm_list.append(np.linalg.norm(gradient))
             gnorm = np.linalg.norm(gradient)
-            if outer_iter == 0:
-                if i >= 2 and gnorm < first_stage_tol:
-                    break
-            else:
-                if gnorm < first_stage_tol:
-                    break
+            if gnorm < first_stage_tol:
+                break
         newX = P * self.a[:, None]
         return g, P, newX, iter
 
@@ -91,7 +90,9 @@ class BISNsolver_EOT(optimal_transport):
         else:
             X = P * self.a[:, None]
         # second-order method
-        g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(g, X, P, log_fixed_term, fixed_term, tol, rho_=rho, inner_max_iter=1000)
+        g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(
+            g, X, P, log_fixed_term, fixed_term, tol, rho_=rho, inner_max_iter=100
+        )
 
         t_end = timeit.default_timer()
         t_total += t_end - t_start
@@ -122,7 +123,7 @@ class BISNsolver_EOT(optimal_transport):
             # gnorm_list.append(gnorm)
             # KL_div = self.KL_divergence(X)
 
-            # print(f"iter = {i + 1:5d}, gnorm = {gnorm:2.1e}")
+            print(f"iter = {i + 1:5d}, gnorm = {gnorm:2.1e}")
 
             if gnorm < tol:
                 return g, X, P, cg_iter, cg_time, i
@@ -159,12 +160,13 @@ class BISNsolver_EOT(optimal_transport):
             alpha, dual_obj = self.line_search_Armijo_(g, log_fixed_term, gradient, d)
             g += alpha * d
             # loss_list.append(dual_obj)
-            P, X = self.update_P_X(g, fixed_term)
+            P, X = self.update_P_X(g, log_fixed_term)
             # alpha_list.append(alpha)
         # plt.plot(np.abs(np.array(loss_list)))
         # plt.plot(np.array(gnorm_list))
         # plt.yscale('log')
         # plt.show()
+        warnings.warn("The algorithm does not reach the required tolerance, you may increase the regularization parameter.")
         return g, X, P, cg_iter, cg_time, inner_max_iter
 
     def Sparsity_introduce(self, P, rho):
@@ -212,7 +214,7 @@ class BISNsolver_EOT(optimal_transport):
             print("Inner product is positive with value ", inner_prod)
             assert inner_prod < 0, "Inner product should be negative"
         # cur_grad_g = self.b - np.sum(self.X, axis=0, keepdims=False)
-        while iter_num <= 100:
+        while iter_num <= 50:
             new_g = g + alpha * direction
             new_dual_obj = self.dual_obj_cal_normalize(new_g, log_fixed_term)
             # print("new objective value is ", new_dual_obj)
@@ -264,7 +266,7 @@ class BISNsolver_EOT(optimal_transport):
 class PINSsolver_EOT(optimal_transport):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.cg_tol = 1e-11
+        self.cg_tol = 1e-20
         self.cg_maxit = max(self.m, self.n) * 100
 
         self.alpha_list = []
@@ -439,6 +441,7 @@ class PINSsolver_EOT(optimal_transport):
 # ========== 使用示例 ==========
 if __name__ == "__main__":
     from Alg.GurobiSolver import *
+    import os
 
     # m, n = 500, 500
     # opt = None
@@ -459,11 +462,11 @@ if __name__ == "__main__":
 
 
 
-    m = n = 1000
-    cost_matrix_norm = "Uniform"  # "Square", "Uniform", "Absolute"
+    m = n = 5000
+    cost_matrix_norm = "Square"  # "Square", "Uniform", "Absolute"
     eta = 1e-4 if cost_matrix_norm == "Square" else 1e-3
     seed = 41
-    RESULT_ROOT = f"Results/alg_compare_m{m}_n{n}_rng{seed}"
+    RESULT_ROOT = f"../Results/alg_compare_m{m}_n{n}_rng{seed}"
     RESULT_ROOT = os.path.join(RESULT_ROOT, cost_matrix_norm)  # 专门放 a,b,opt
     opt_cache_path = os.path.join(RESULT_ROOT, "opt_ab.npz")
     cache = np.load(opt_cache_path, allow_pickle=False)
@@ -488,11 +491,13 @@ if __name__ == "__main__":
     # solver = SSNSSolver(C=C, eta=1e-3, a=a, b=b, obj_truth=opt)
     # X1 = solver.optimize(tol=1e-7, max_iter=3000)
 
-    solver = PINSsolver_EOT(C=C, eta=1e-3, a=a, b=b, obj_truth=opt)
-    X1 = solver.optimize(tol=1e-9)
+    # solver = PINSsolver_EOT(C=C, eta=1e-3, a=a, b=b, obj_truth=opt)
+    # X1 = solver.optimize(tol=1e-9)
 
-    solver = BISNsolver_EOT(C=C, eta=1e-3, a=a, b=b, obj_truth=opt, skip_first_stage=False)
+    solver = BISNsolver_EOT(C=C, eta=1e-4, a=a, b=b, obj_truth=opt, skip_first_stage=False)
+    start_time = timeit.default_timer()
     X = solver.optimize(tol=1e-9)
-    print(np.linalg.norm(X - X1))
+    end_time = timeit.default_timer()
+    print("time is ", end_time - start_time)
     # X = solver._round_to_marginals(X, a, b)
 

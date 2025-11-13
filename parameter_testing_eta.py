@@ -4,26 +4,6 @@ from Alg.Algorithm_Import import *
 
 def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix="", title_suffix="",
                      downsample_map=None, default_stride=1, solid_algos=None):
-    """
-    聚合 CSV 并画两张图（误差-迭代，误差-时间）。
-    支持按算法下采样：downsample_map = {"EG-OT":100, "Classic-Sinkhorn":50, ...}
-    其余算法使用 default_stride（默认 1 = 不下采样）。
-
-    参数
-    ----
-    data : dict[str, list[pd.DataFrame]]
-        load_results(...) 的返回 {algo: [df_trial0, df_trial1, ...]}
-    ylog : bool
-        y 轴是否取对数
-    show_bands : bool
-        是否显示均值 ± 标准差阴影带
-    title_suffix : str
-        标题后缀
-    downsample_map : dict[str, int] | None
-        每个算法的下采样步长（每 k 个 iter 取一次）
-    default_stride : int
-        未在 downsample_map 指定的算法使用的步长（默认 1）
-    """
     if not data:
         print("No data to plot.")
         return
@@ -60,7 +40,10 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
         solid_set = set(solid_algos)
 
     def ls(name: str) -> str:
-        return "-" if name in solid_set else "--"
+        if name == "BISN": return "-"
+        elif name == "PINS": return "--"
+        elif name == "Sinkhorn": return ":"
+        # return "-" if name in solid_set else "--"
 
     # ========== 图1：误差 vs 迭代 ==========
     plt.figure(figsize=(8, 5))
@@ -159,7 +142,7 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
 
 
 # ===== 固定超参 =====
-eta_list = [1e-2, 1e-3, 1e-4]
+eta_list = [1e-2, 1e-3]
 m = n = 1000
 cost_matrix_norm = "Uniform"  # "Square", "Uniform"
 time_max = np.inf
@@ -217,6 +200,7 @@ else:
 ALGORITHMS = {
     "BISN": run_BISN,
     "PINS": run_PINS,
+    "Sinkhorn": run_Sinkhorn,
 }
 
 for eta in eta_list:
@@ -225,7 +209,7 @@ for eta in eta_list:
         DATA_path = os.path.join(RESULT_ROOT, f"{alg_name}_{eta}.csv")
         if not os.path.exists(DATA_path):
             print(f" Running {alg_name}...")
-            X, history, eta_val = fn(C, a, b, eta=eta, tol=1e-11, time_max=1000.0, opt=opt)
+            X, history, eta_val = fn(C, a, b, eta=eta, tol=1e-11, time_max=10000.0, opt=opt)
             df = pd.DataFrame({
                 "algo": alg_name,
                 "data_name": cost_matrix_norm,

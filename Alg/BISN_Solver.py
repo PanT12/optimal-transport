@@ -1,12 +1,13 @@
 import numpy as np
 from copy import deepcopy
-from .base import *
+from Alg.base import *
 import math
 import timeit
 import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, cg
 import matplotlib.pyplot as plt
 from scipy.special import logsumexp
+import warnings
 
 
 class BISNsolver(optimal_transport):
@@ -26,23 +27,23 @@ class BISNsolver(optimal_transport):
         self.gnorm = []
         self.KL = []
 
-    def update_P_X(self, g, fixed_term):
-        # normalized_g = g - np.max(g)
-        # g1 = normalized_g * np.ones((self.m, 1))
-        # Y = logX + (g - self.C) / self.eta
-        # Y = Y - np.max(Y, axis=1, keepdims=True)
-        # numerator = np.exp(Y)
+    def update_P_X(self, g, log_fixed_term):
+        # exp_term = np.exp((g - np.max(g)) / self.eta)
+        # numerator = np.clip(fixed_term * exp_term, 1e-300, None)
         # row_sum = numerator.sum(axis=1, keepdims=True)
-
-        exp_term = np.exp((g - np.max(g)) / self.eta)
-        numerator = fixed_term * exp_term
-        row_sum = np.maximum(numerator.sum(axis=1, keepdims=True), 1e-300)
-
-        P = numerator / row_sum
+        #
+        # P = numerator / row_sum
+        # newX = P * self.a[:, None]
+        # return P, newX
+        #
+        u = g / self.eta
+        Z = log_fixed_term + u[None, :]
+        lse = logsumexp(Z, axis=1, keepdims=True)  # (m,1)
+        P = np.exp(Z - lse)  # softmax rows
         newX = P * self.a[:, None]
         return P, newX
 
-    def accelerated_gradient(self, g, P, X, log_fixed_term, first_stage_tol, inner_iter, outer_iter, stepsize=1e-1):
+    def accelerated_gradient(self, g, P, log_fixed_term, first_stage_tol, inner_iter, stepsize=1e-1):
         # stepsize = 1e-3
         beta = 0.0
         lam, lam_past = 0.0, 0.0
@@ -50,7 +51,7 @@ class BISNsolver(optimal_transport):
         iter = 0
         # numerator = np.zeros((self.m, self.n))
         # P = np.zeros((self.m, self.n))
-        # row_sum = np.zeros((self.m, 1))
+        row_sum = np.zeros((self.m, 1))
         loss_list = []
         gnorm_list = []
         for i in range(inner_iter):
@@ -119,10 +120,12 @@ class BISNsolver(optimal_transport):
                 iter1 = 0
             else:
                 g, P, X, iter1 = self.accelerated_gradient(
-                    g, P, X, log_fixed_term, first_stage_tol, inner_iter=5000, outer_iter=k, stepsize=2*self.eta
+                    g, P, log_fixed_term, first_stage_tol, inner_iter=5000, stepsize=2*self.eta
                 )
             # second-order method
-            g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(g, X, P, log_fixed_term, fixed_term, tol_inner, rho_=rho, inner_max_iter=1000)
+            g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(
+                g, X, P, log_fixed_term, fixed_term, tol_inner, rho_=rho, inner_max_iter=30
+            )
 
             t_end = timeit.default_timer()
             t_total += t_end - t_start
@@ -157,11 +160,11 @@ class BISNsolver(optimal_transport):
             # gnorm_list.append(gnorm)
             # KL_div = self.KL_divergence(X)
 
-            # print("gradient norm is", np.linalg.norm(gradient))
+            # print("Inner iteration stops at ", i , "gradient norm is", np.linalg.norm(gradient))
 
-            if gnorm < tol and i > 0:
-                KL_div = self.KL_divergence(X+1e-300)
-                # print("Inner iteration stops at ", i, "with gnorm", gnorm, "and KL divergence", KL_div)
+            if gnorm < tol:
+                KL_div = self.KL_divergence(X)
+                # print("Inner iteration stops at ", i, "KL divergence", KL_div, "and requird tol ", min(self.n, self.m) * tol)
                 if KL_div < min(self.n, self.m) * tol:
                     return g, X, P, cg_iter, cg_time, i
 
@@ -202,13 +205,13 @@ class BISNsolver(optimal_transport):
             alpha, dual_obj = self.line_search_Armijo_(g, log_fixed_term, gradient, d)
             g += alpha * d
             # loss_list.append(dual_obj)
-            P, X = self.update_P_X(g, fixed_term)
+            P, X = self.update_P_X(g, log_fixed_term)
             # alpha_list.append(alpha)
         # self.condition_num.append(condition_num)
         # self.alpha_list.append(alpha_list)
         # self.loss_list.append(loss_list)
         # print("alpha mean is ", np.mean(alpha), "alpha std is ", np.std(alpha))
-
+        warnings.warn("The algorithm does not reach the required tolerance, you may increase the regularization parameter.")
         return g, X, P, cg_iter, cg_time, inner_max_iter
 
     def check_matrix(self, mat):
@@ -319,49 +322,53 @@ if __name__ == "__main__":
     from GurobiSolver import *
     import matplotlib.pyplot as plt
     import os
-    # m, n = 400, 500
-    # eta = 1e-3
-    # opt = None
-    # # np.random.seed(10)
-    # a = np.random.rand(m)
-    # a = a / np.sum(a)  # [0.54100398 0.01455541 0.44444061]
-    # # print("a is ", a)
-    # b = np.random.rand(n)
-    # b = b / np.sum(b)  # [0.44833981 0.29847674 0.13459504 0.11858842]
-    # # print("b is ", b)
+    m, n = 2, 2
+    eta = 1e-3
+    opt = None
+    np.random.seed(4)
+    a = np.random.rand(m)
+    a = a / np.sum(a)  # [0.54100398 0.01455541 0.44444061]
+    # print("a is ", a)
+    b = np.random.rand(n)
+    b = b / np.sum(b)  # [0.44833981 0.29847674 0.13459504 0.11858842]
+    # print("b is ", b)
     # C = np.random.rand(m, n)
-    #
+
+    J = np.arange(n)
+    C = (J[None, :] - J[:, None]) ** 2
+    C = C / np.max(C)
+
     # guro = Gurobisolver(C, a, b)
     # gt = guro.Gurobi_Solver_original()
     # opt = np.sum(C * gt)
 
-    m = n = 1000
-    cost_matrix_norm = "Uniform"  # "Square", "Uniform", "Absolute"
-    eta = 1e-4 if cost_matrix_norm == "Square" else 1e-3
-    seed = 41
-    RESULT_ROOT = f"Results/alg_compare_m{m}_n{n}_rng{seed}"
-    RESULT_ROOT = os.path.join(RESULT_ROOT, cost_matrix_norm)  # 专门放 a,b,opt
-    opt_cache_path = os.path.join(RESULT_ROOT, "opt_ab.npz")
-    cache = np.load(opt_cache_path, allow_pickle=False)
-    a = cache["a"]
-    b = cache["b"]
-    opt = float(cache["opt"])
+    # m = n = 1000
+    # cost_matrix_norm = "Uniform"  # "Square", "Uniform", "Absolute"
+    # eta = 1e-4 if cost_matrix_norm == "Square" else 1e-3
+    # seed = 41
+    # RESULT_ROOT = f"../Results/alg_compare_m{m}_n{n}_rng{seed}"
+    # RESULT_ROOT = os.path.join(RESULT_ROOT, cost_matrix_norm)  # 专门放 a,b,opt
+    # opt_cache_path = os.path.join(RESULT_ROOT, "opt_ab.npz")
+    # cache = np.load(opt_cache_path, allow_pickle=False)
+    # a = cache["a"]
+    # b = cache["b"]
+    # opt = float(cache["opt"])
+    #
+    # # ===== cost matrix =====
+    # if cost_matrix_norm == "Square":
+    #     J = np.arange(n)
+    #     C = (J[None, :] - J[:, None]) ** 2
+    #     C = C / np.max(C)
+    # elif cost_matrix_norm == "Uniform":
+    #     np.random.seed(seed)
+    #     C = np.random.uniform(0, 1, size=(m, n))
+    #     C = C / np.max(C)
+    # elif cost_matrix_norm == "Absolute":
+    #     J = np.arange(n)
+    #     C = np.abs(J[None, :] - J[:, None])
+    #     C = C / np.max(C)
 
-    # ===== cost matrix =====
-    if cost_matrix_norm == "Square":
-        J = np.arange(n)
-        C = (J[None, :] - J[:, None]) ** 2
-        C = C / np.max(C)
-    elif cost_matrix_norm == "Uniform":
-        np.random.seed(seed)
-        C = np.random.uniform(0, 1, size=(m, n))
-        C = C / np.max(C)
-    elif cost_matrix_norm == "Absolute":
-        J = np.arange(n)
-        C = np.abs(J[None, :] - J[:, None])
-        C = C / np.max(C)
-
-    solver = BISNsolver(C=C, eta=eta, a=a, b=b, obj_truth=opt)
+    solver = BISNsolver(C=C, eta=1e-3, a=a, b=b, obj_truth=opt)
     X = solver.optimize(max_iter=300, tol=1e-11)
     X = solver._round_to_marginals(X, a, b)
 
@@ -371,7 +378,7 @@ if __name__ == "__main__":
 
     plt.plot(solver.history["abs_err"])
     plt.yscale('log')
-    plt.show()
+    # plt.show()
 
     plt.plot(solver.history["Delta_p"], label='Delta_p')
     plt.plot(solver.history["Delta_d"], label='Delta_d')
@@ -380,7 +387,7 @@ if __name__ == "__main__":
     # plt.plot(solver.gnorm, label='gnorm')
     plt.legend()
     plt.yscale('log')
-    plt.show()
+    # plt.show()
 
     # 恢复传输计划 T*
     cost = np.sum(C * X)
@@ -388,4 +395,4 @@ if __name__ == "__main__":
     # print("column sum err is ", np.linalg.norm(X.sum(axis=0) - b))
 
     # print("difference between gurobi and ssns", np.linalg.norm(X - gt))
-    print("difference between cost is ", np.abs(cost - opt))
+    # print("difference between cost is ", np.abs(cost - opt))

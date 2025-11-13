@@ -34,7 +34,7 @@ exp = "synthetic"
 
 # experiment settings
 if exp == "synthetic":
-    m = n = 10000
+    m = n = 5000
     cost_matrix_norm = "Uniform"  # "Square" or "Uniform"
 elif exp == "real":
     experiment_id = 1  # 1,2,3

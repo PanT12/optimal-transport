@@ -10,7 +10,7 @@ class SPLRSolver(optimal_transport):
     """
     Sparse-Plus-Low-Rank Quasi-Newton (Algorithm 1) for Entropic-regularized OT dual.
     """
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cg_tol=1e-11, **kwargs):
         super().__init__(*args, **kwargs)
         self.rho_max = 1e-2
         self.rho_min = 0.01 * self.rho_max
@@ -20,7 +20,7 @@ class SPLRSolver(optimal_transport):
 
         # CG parameters
         self.cg_maxit = max(self.m, self.n) * 100
-        self.cg_tol = 1e-11
+        self.cg_tol = cg_tol
 
         # Wolfe line-search parameters
         self.c1, self.c2 = 1e-4, 0.9

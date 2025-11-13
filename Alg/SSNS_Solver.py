@@ -14,12 +14,12 @@ except Exception:
 
 
 class SSNSSolver(optimal_transport):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, cg_tol=1e-11, **kwargs):
         super().__init__(*args, **kwargs)
         self.use_sparse = True
 
         # CG params
-        self.cg_tol = 1e-11
+        self.cg_tol = cg_tol
         self.cg_maxit = max(self.m, self.n) * 100
 
         # Algorithm 2 default params

@@ -30,13 +30,14 @@ def _round_to_marginals(X, r, c):
 
 
 exp = "real"
+eta = 1e-3
 
 # experiment settings
 if exp == "synthetic":
     m = n = 10000
-    cost_matrix_norm = "Uniform"  # "Square" or "Uniform"
+    cost_matrix_norm = "Square"  # "Square" or "Uniform"
 elif exp == "real":
-    experiment_id = 3  # 1,2,3
+    experiment_id = 2  # 1,2,3
     size = 64  # only for DOTmark
     ID = {"DOTmark": {1: "Shapes", 2: "ClassicImages", 3: "MicroscopyImages"}}
 else:
@@ -127,19 +128,18 @@ elif exp == "real":
         np.savez(opt_cache_path, opt=opt)
         print(f"  [cache] saved opt to {opt_cache_path}")
 
-
 alg = [
-    # 0,
-    # 1,
-    # 2,
-    # 3,
-    4
+    0,  #BISN
+    # 1,  # KL-regularized
+    # 2,  # L2-regularized
+    # 3,  # sparsity regularized
+    4,  # sinkhorn stabilized
 ]
 
 # our
 if 0 in alg:
-    solver = BISNsolver_EOT(C, 1e-3, a, b, skip_first_stage=True)
-    X = solver.optimize(tol=1e-9)
+    solver = BISNsolver_EOT(C, eta, a, b, skip_first_stage=True)
+    X = solver.optimize(tol=1e-15)
     t = solver.history["time"][-1]
     rowdiff = np.linalg.norm(a - X.sum(axis=1))
     coldiff = np.linalg.norm(b - X.sum(axis=0))
@@ -151,32 +151,32 @@ if 0 in alg:
 # KL-regularized OT
 if 1 in alg:
     start1 = timeit.default_timer()
-    X1 = ot.smooth.smooth_ot_dual(a, b, C, 1e-3, reg_type='kl', stopThr=1e-9)
+    X1 = ot.smooth.smooth_ot_dual(a, b, C, eta, reg_type='kl', stopThr=1e-9)
     end1 = timeit.default_timer()
     t1 = end1 - start1
     rowdiff1 = np.linalg.norm(a - X1.sum(axis=1))
     coldiff1 = np.linalg.norm(b - X1.sum(axis=0))
-    print("row difference before rounding is ", rowdiff)
-    print("col difference before rounding is ", coldiff)
+    print("row difference before rounding is ", rowdiff1)
+    print("col difference before rounding is ", coldiff1)
     print("KL-regularized OT time is ", t1)
 
 # Quadratically regularized OT
 if 2 in alg:
     start2 = timeit.default_timer()
-    X2 = ot.smooth.smooth_ot_dual(a, b, C, 1e-3, reg_type='l2', stopThr=1e-9)
+    X2 = ot.smooth.smooth_ot_dual(a, b, C, eta, reg_type='l2', stopThr=1e-9)
     end2 = timeit.default_timer()
     t2 = end2 - start2
     rowdiff2 = np.linalg.norm(a - X2.sum(axis=1))
     coldiff2 = np.linalg.norm(b - X2.sum(axis=0))
-    print("row difference before rounding is ", np.linalg.norm(a - X2.sum(axis=1)))
-    print("col difference before rounding is ", np.linalg.norm(b - X2.sum(axis=0)))
+    print("row difference before rounding is ", rowdiff2)
+    print("col difference before rounding is ", coldiff2)
     print("Quadratically regularized OT time is ", t2)
 
 
 # Sparsity-constrained optimal transport
 if 3 in alg:
     start3 = timeit.default_timer()
-    X3 = ot.smooth.smooth_ot_dual(a, b, C, 1e-3, reg_type='sparsity_constrained', max_nz=2)
+    X3 = ot.smooth.smooth_ot_dual(a, b, C, eta, reg_type='sparsity_constrained', max_nz=2)
     end3 = timeit.default_timer()
     t3 = end3 - start3
     rowdiff3 = np.linalg.norm(a - X3.sum(axis=1))
@@ -191,25 +191,35 @@ if 3 in alg:
 # Generalized conditional gradient: analysis of convergence and applications. arXiv preprint arXiv:1510.06567.
 
 if 4 in alg:
-    def f(x):
-        return 0.5 * np.sum(x**2)
-    def df(x):
-        return x
+    # def f(x):
+    #     return 0.5 * np.sum(x**2)
+    # def df(x):
+    #     return x
+    # start4 = timeit.default_timer()
+    # X4 = ot.optim.gcg(a, b, C, 1e-3, 1e-3, f, df, numItermax=100,  numInnerItermax=500)
+    # end4 = timeit.default_timer()
+    # t4 = end4 - start4
     start4 = timeit.default_timer()
-    X4 = ot.optim.gcg(a, b, C, 1e-3, 1e-3, f, df, numItermax=100,  numInnerItermax=500)
+    X4 = ot.sinkhorn(a, b, C, eta, method='sinkhorn_stabilized', verbose=True, numItermax=10000, stopThr=1e-15)
+    end4 = timeit.default_timer()
     end4 = timeit.default_timer()
     t4 = end4 - start4
     rowdiff4 = np.linalg.norm(a - X4.sum(axis=1))
     coldiff4 = np.linalg.norm(b - X4.sum(axis=0))
     print("row difference before rounding is ", np.linalg.norm(a - X4.sum(axis=1)))
     print("col difference before rounding is ", np.linalg.norm(b - X4.sum(axis=0)))
-    print("GCG OT time is ", t4)
+    print("Sinkhorn stabilized OT time is ", t4)
 
 
-# result = {
-#     0: [rowdiff, coldiff, t],
-#     1: [rowdiff1, coldiff1, t1],
-#     2: [rowdiff2, coldiff2, t2],
-#     3: [rowdiff3, coldiff3, t3],
-#     4: [rowdiff4, coldiff4, t4],
-# }
+result = {
+    "KL": [rowdiff1, coldiff1, t1],
+    "L2": [rowdiff2, coldiff2, t2],
+    "sparsity": [rowdiff3, coldiff3, t3],
+    "Sinkhorn": [rowdiff4, coldiff4, t4],
+    "(E)BISN(N)": [rowdiff, coldiff, t],
+}
+
+# for latex
+for key in result:
+    rowdiff, coldiff, t = result[key]
+    print(f"{key} & {rowdiff:.1e} & {coldiff:.1e} & {t:.2f}")

@@ -1,3 +1,6 @@
+import matplotlib.pyplot as plt
+from jinja2.optimizer import optimize
+
 from Data_Sample_Import import *
 from Alg.Algorithm_Import import *
 import numpy as np
@@ -13,6 +16,7 @@ ALGORITHMS = {
     # "HOT": run_hot_halpern,
     # "PINS": run_PINS,
     # "SPLR": run_splr,
+    "Sinkhorn": run_Sinkhorn,
 }
 
 ID = {
@@ -22,9 +26,9 @@ ID = {
 }
 
 # choose data and experiment_id
-experiment_id = 3
+experiment_id = 1
 dataset_name = "MNIST"  # MNIST, FashionMNIST, DOTmark
-size = 64  # only for DOTmark
+size = 32  # only for DOTmark
 
 this_dir = os.path.dirname(__file__)
 default_dir = os.path.join(this_dir, "data", dataset_name)
@@ -66,6 +70,29 @@ else:
     # 缓存 a,b,opt，方便复现与跳过 Gurobi
     np.savez(opt_cache_path, opt=opt)
     print(f"  [cache] saved opt to {opt_cache_path}")
+from Sinkhorn_L0 import Sinkhorn_l0_Newton
+solver = Sinkhorn_l0_Newton(C, 1e-3, a, b, opt)
+X = solver.optimize(max_iter=300, tol=1e-11)
+plt.plot(solver.history["time"], solver.history["abs_err"])
+plt.yscale('log')
+plt.xlabel("Time (s)")
+plt.ylabel("Absolute Error")
+plt.title("Sinkhorn l0 Newton Convergence")
+plt.show()
+
+df = pd.DataFrame({
+    "iter": np.arange(len(solver.history['time']), dtype=int),
+    "opt": [opt] * len(solver.history.get("time", [])),
+    "eta": [1e-3] * len(solver.history.get("time", [])),
+})
+for key in solver.history:
+    if not solver.history[key]:
+        solver.history[key] = [None] * len(solver.history['time'])
+df = pd.concat([df, pd.DataFrame(solver.history)], axis=1)
+
+out_path = os.path.join(RESULT_ROOT, "ori.csv")
+df.to_csv(out_path, index=False)
+print(f"  saved -> {out_path}")
 
 for alg_name, fn in ALGORITHMS.items():
     print(f" Running {alg_name}...")

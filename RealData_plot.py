@@ -156,7 +156,7 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
     plt.ylabel("Gap")
     if ylog:
         plt.yscale("log")
-    plt.xlim(left=0, right=None)
+    plt.xlim(left=0, right=100)
     plt.grid(alpha=0.3)
     plt.legend(loc="upper right")
     plt.title(f"{title_prefix} {title_suffix}")
@@ -172,9 +172,9 @@ ID = {
 }
 
 # choose data and experiment_id
-experiment_id = 3
-dataset_name = "DOTmark"  # MNIST, FashionMNIST, DOTmark
-size = 64
+experiment_id = 2
+dataset_name = "MNIST"  # MNIST, FashionMNIST, DOTmark
+size = 32
 figure_show = True
 
 this_dir = os.path.dirname(__file__)
