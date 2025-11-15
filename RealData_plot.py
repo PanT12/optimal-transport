@@ -166,7 +166,8 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
         plt.show()
 
 ID = {
-    "MNIST": {1: [0, 1], 2: [2, 54698], 3: [3, 12580]},
+    # "MNIST": {1: [0, 1], 2: [2, 54698], 3: [3, 12580]},
+    "MNIST": {1: [0, 1], 2: [2, 24500], 3: [3, 3800]},
     "FashionMNIST": {1: [0, 1], 2: [2, 54698], 3: [3, 12580]},
     "DOTmark": {1: "Shapes", 2: "ClassicImages", 3: "MicroscopyImages"},
 }
@@ -174,7 +175,7 @@ ID = {
 # choose data and experiment_id
 experiment_id = 2
 dataset_name = "MNIST"  # MNIST, FashionMNIST, DOTmark
-size = 32
+size = 64
 figure_show = True
 
 this_dir = os.path.dirname(__file__)

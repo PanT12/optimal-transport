@@ -118,10 +118,13 @@ def sinkhorn_knopp(
             u = np.ones((dim_a, n_hists)) / dim_a
             v = np.ones((dim_b, n_hists)) / dim_b
         else:
-            u = np.ones(dim_a) / dim_a
-            v = np.ones(dim_b) / dim_b
+            u = np.ones(dim_a)
+            v = np.ones(dim_b)
     else:
         u, v = np.exp(warmstart[0]), np.exp(warmstart[1])
+
+    u = np.ones(dim_a)
+    v = np.ones(dim_b)
 
     K = np.exp(M / (-reg))
 
@@ -161,6 +164,8 @@ def sinkhorn_knopp(
                 log["err"].append(err)
 
             if err < stopThr:
+                print("dual variables 1 is ", reg * np.log(u))
+                print("dual variables 2 is ", reg * np.log(v))
                 break
             if verbose:
                 if ii % 200 == 0:
@@ -195,42 +200,58 @@ def sinkhorn_knopp(
 if __name__ == "__main__":
     import os
     import timeit
-    m = n = 5000
-    cost_matrix_norm = "Square"  # "Square" or "Uniform"
 
-    seed = 41
-    rng = np.random.default_rng(seed)
-    RESULT_ROOT = f"Results/cg/Synthetic/cg_compare_m{m}_n{n}"
-    print(f"Result root is {RESULT_ROOT}")
-    RESULT_ROOT = os.path.join(RESULT_ROOT, str(cost_matrix_norm))
-    os.makedirs(RESULT_ROOT, exist_ok=True)
+    m, n = 3, 3
+    eta = 1e-4
+    opt = None
+    np.random.seed(7)
+    a = np.random.rand(m)
+    a = a / np.sum(a)  # [0.54100398 0.01455541 0.44444061]
+    # print("a is ", a)
+    b = np.random.rand(n)
+    b = b / np.sum(b)  # [0.44833981 0.29847674 0.13459504 0.11858842]
+    # print("b is ", b)
+    C = np.random.rand(m, n)
+    C /= np.max(C)
 
-    # ===== cost matrix =====
-    if cost_matrix_norm == "Square":
-        J = np.arange(n)
-        C = (J[None, :] - J[:, None]) ** 2
-        C = C / np.max(C)
-    elif cost_matrix_norm == "Uniform":
-        np.random.seed(seed)
-        C = np.random.uniform(0, 1, size=(m, n))
-        C = C / np.max(C)
-    elif cost_matrix_norm == "Absolute":
-        J = np.arange(n)
-        C = np.abs(J[None, :] - J[:, None])
-        C = C / np.max(C)
-    # ===== 1) 读取或生成 a,b，并读取或计算 opt =====
-    opt_cache_path = os.path.join(RESULT_ROOT, "opt_ab.npz")
 
-    if os.path.exists(opt_cache_path):
-        cache = np.load(opt_cache_path, allow_pickle=False)
-        a = cache["a"]
-        b = cache["b"]
-        opt = float(cache["opt"])
-        print(f"  [cache] loaded a,b,opt from {opt_cache_path}")
+    # m = n = 5000
+    # cost_matrix_norm = "Square"  # "Square" or "Uniform"
+    #
+    # seed = 41
+    # rng = np.random.default_rng(seed)
+    # RESULT_ROOT = f"Results/cg/Synthetic/cg_compare_m{m}_n{n}"
+    # print(f"Result root is {RESULT_ROOT}")
+    # RESULT_ROOT = os.path.join(RESULT_ROOT, str(cost_matrix_norm))
+    # os.makedirs(RESULT_ROOT, exist_ok=True)
+    #
+    # # ===== cost matrix =====
+    # if cost_matrix_norm == "Square":
+    #     J = np.arange(n)
+    #     C = (J[None, :] - J[:, None]) ** 2
+    #     C = C / np.max(C)
+    # elif cost_matrix_norm == "Uniform":
+    #     np.random.seed(seed)
+    #     C = np.random.uniform(0, 1, size=(m, n))
+    #     C = C / np.max(C)
+    # elif cost_matrix_norm == "Absolute":
+    #     J = np.arange(n)
+    #     C = np.abs(J[None, :] - J[:, None])
+    #     C = C / np.max(C)
+    # # ===== 1) 读取或生成 a,b，并读取或计算 opt =====
+    # opt_cache_path = os.path.join(RESULT_ROOT, "opt_ab.npz")
+    #
+    # if os.path.exists(opt_cache_path):
+    #     cache = np.load(opt_cache_path, allow_pickle=False)
+    #     a = cache["a"]
+    #     b = cache["b"]
+    #     opt = float(cache["opt"])
+    #     print(f"  [cache] loaded a,b,opt from {opt_cache_path}")
 
-        start = timeit.default_timer()
-        X = sinkhorn_knopp(a, b, C, 1e-4, verbose=True, numItermax=5000)
-        stop = timeit.default_timer()
-        print(f"time: {stop - start}")
-        print("Difference of row is ", np.linalg.norm(a - X.sum(axis=1)))
-        print("Difference of column is ", np.linalg.norm(b - X.sum(axis=0)))
+
+    start = timeit.default_timer()
+    X = sinkhorn_knopp(a, b, C, 1e-2, verbose=True, numItermax=5000, stopThr=1e-3)
+    stop = timeit.default_timer()
+    print(f"time: {stop - start}")
+    print("Difference of row is ", np.linalg.norm(a - X.sum(axis=1)))
+    print("Difference of column is ", np.linalg.norm(b - X.sum(axis=0)))

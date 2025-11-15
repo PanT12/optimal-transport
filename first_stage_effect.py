@@ -151,7 +151,7 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
 
 # ===== 固定超参 =====
 m = n = 5000
-cost_matrix_norm = "Square"  # "Square" or "Uniform"
+cost_matrix_norm = "Uniform"  # "Square" or "Uniform"
 time_max = 10000.0
 eta = 1e-4 if cost_matrix_norm == "Square" else 1e-3
 tol = 1e-7
@@ -241,7 +241,7 @@ plot_from_loaded(
     title_suffix=f"(m={m}, n={n})",
     default_stride=1,
     solid_algos="None",
-    figure_show=False
+    figure_show=True
 )
 
 

@@ -17,8 +17,8 @@ class SinkhornSolver(optimal_transport):
         u = np.ones(self.m) / self.m
         v = np.ones(self.n) / self.n
         t_total = 0.0
-        self.record(t_total=t_total, cg_iter=0, gnorm=None, X=X)
-        self.kkt_err(X, -self.eta * np.log(v), -self.eta * np.log(u))
+        self.record(t_total=t_total, cg_iter=0, gnorm=None, X=X, first_stage_iter=0)
+        self.kkt_err(X, self.eta * np.log(v), self.eta * np.log(u))
 
         for k in range(max_iter):
 
@@ -35,8 +35,8 @@ class SinkhornSolver(optimal_transport):
             row_diff, col_diff = row_sum - self.a, col_sum - self.b
             diff = np.concatenate([row_diff, col_diff])
             gnorm = np.linalg.norm(diff)
-            self.record(t_total=t_total, cg_iter=0, gnorm=gnorm, X=X)
-            kkt_err = self.kkt_err(X, -self.eta * np.log(v), -self.eta * np.log(u))
+            self.record(t_total=t_total, cg_iter=0, gnorm=gnorm, X=X, first_stage_iter=i)
+            kkt_err = self.kkt_err(X, self.eta * np.log(v), self.eta * np.log(u))
             if k % 1 == 0:
                 print(
                     f"iter = {k:5d}, inner_iter = {i:5d}, gnorm = {gnorm: 2.1e}, "
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     #     C = np.abs(J[None, :] - J[:, None])
     #     C = C / np.max(C)
 
-    solver = SinkhornOTSolver(C=C, eta=1e-2, a=a, b=b, obj_truth=opt)
+    solver = SinkhornSolver(C=C, eta=1e-2, a=a, b=b, obj_truth=opt)
     X = solver.optimize(max_iter=300, tol=1e-11)
     X = solver._round_to_marginals(X, a, b)
 

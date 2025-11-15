@@ -14,7 +14,7 @@ import os
 # ====== 已实现：你的算法 ======
 def run_BISN(C, a, b, eta, tol, time_max, opt):
     solver = BISNsolver(C, eta, a, b, opt)
-    X = solver.optimize(max_iter=300, tol=1e-10, time_max=time_max, verbose=True)
+    X = solver.optimize(max_iter=300, tol=1e-11, time_max=time_max, verbose=True)
     return X, solver.history, solver.eta
 
 # ====== 其它算法：留空给你填（保持相同签名 & 返回值） ======
@@ -77,11 +77,11 @@ def run_IPOT(C, a, b, eta, tol, time_max, opt):
 
 def run_Sinkhorn(C, a, b, eta, tol, time_max, opt):
     solver = SinkhornSolver(C=C, eta=eta, a=a, b=b, obj_truth=opt)
-    if eta == 1e-2: max_iter = 800
+    if eta == 1e-2: max_iter = 600
     elif eta == 1e-3: max_iter = 300
     elif eta == 1e-4: max_iter = 80
     else: max_iter = 300
-    X = solver.optimize(tol=1e-10, max_iter=max_iter)
+    X = solver.optimize(tol=1e-11, max_iter=max_iter)
     return X, solver.history, solver.eta
 
 # ========= 加载并画图：从 CSV 聚合结果 =========

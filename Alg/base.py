@@ -47,6 +47,7 @@ class optimal_transport:
             "Delta_d": [],
             "Delta_c": [],
             "newton_iter":[],
+            "first_stage_iter":[],
         }
 
     def _residuals(self, X):
@@ -55,7 +56,7 @@ class optimal_transport:
         col_resid = np.linalg.norm(X.sum(axis=0) - self.b)
         return row_resid, col_resid
 
-    def record(self, t_total, cg_iter, gnorm, X, newton_iter=None, cg_time=None):
+    def record(self, t_total, cg_iter, gnorm, X, newton_iter=None, cg_time=None, first_stage_iter=None):
         self.history["time"].append(t_total)
 
         row_resid, col_resid = self._residuals(X)
@@ -85,6 +86,9 @@ class optimal_transport:
 
         if cg_time is not None:
             self.history["cg_time"].append(cg_time)
+
+        if first_stage_iter is not None:
+            self.history["first_stage_iter"].append(first_stage_iter)
 
     def _round_to_marginals(self, X, r, c):
         """

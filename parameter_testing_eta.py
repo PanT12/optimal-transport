@@ -142,8 +142,8 @@ def plot_from_loaded(result_root, data, ylog=True, show_bands=True, title_prefix
 
 
 # ===== 固定超参 =====
-eta_list = [1e-2, 1e-3]
-m = n = 1000
+eta_list = [1e-2, 1e-3, 1e-4]
+m = n = 5000
 cost_matrix_norm = "Uniform"  # "Square", "Uniform"
 time_max = np.inf
 tol = 1e-11

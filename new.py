@@ -12,7 +12,6 @@ import warnings
 import ot
 
 
-
 class BISNsolver_EOT(optimal_transport):
     def __init__(self, *args, skip_first_stage=False, **kwargs):
         super().__init__(*args, **kwargs)
@@ -114,6 +113,8 @@ class BISNsolver_EOT(optimal_transport):
 
         fixed_term = self.K
         log_fixed_term = self.logK
+
+        res = self.solve_semi_dual()
 
         # first-order method
         if not self.skip_first_stage:
@@ -238,19 +239,6 @@ class BISNsolver_EOT(optimal_transport):
         s = logsumexp(log_fixed_term + u[None, :], axis=1)  # (m,)
         obj = -np.sum(g * self.b) + self.eta * np.sum(self.a * s)
         return obj
-
-    def solve_semi_dual(self, X, g, log_fixed_term):
-        from scipy.optimize import minimize
-
-        def _func():
-            column_sum = X.sum(axis=0)
-            gradient = column_sum - self.b
-            obj = self.dual_obj_cal_normalize(g, log_fixed_term)
-            return obj, gradient
-
-        res = minimize(_func, g, method='L-BFGS-B', options={'disp': True, 'gtol': 1e-3, 'maxiter': 5000})
-
-        return res.x, res
 
     def line_search_Armijo_(self, g, log_fixed_term, cur_grad_g, direction, sigma=0.8, gamma=1e-4):
         alpha = 1.0
@@ -493,10 +481,10 @@ if __name__ == "__main__":
     from Alg.GurobiSolver import *
     import os
 
-    m, n = 3, 3
+    m, n = 400, 300
     eta = 1e-4
     opt = None
-    np.random.seed(7)
+    # np.random.seed(7)
     a = np.random.rand(m)
     a = a / np.sum(a)  # [0.54100398 0.01455541 0.44444061]
     # print("a is ", a)
@@ -544,6 +532,10 @@ if __name__ == "__main__":
 
     # solver = PINSsolver_EOT(C=C, eta=1e-3, a=a, b=b, obj_truth=opt)
     # X1 = solver.optimize(tol=1e-9)
+    start_time = timeit.default_timer()
+    X = ot.smooth.solve_semi_dual(a, b, C, regul=1e-2, tol=1e-3)
+    end_time = timeit.default_timer()
+    print("OT time is ", end_time - start_time)
 
     solver = BISNsolver_EOT(C=C, eta=1e-2, a=a, b=b, obj_truth=opt, skip_first_stage=False)
     start_time = timeit.default_timer()

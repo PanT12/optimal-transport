@@ -33,9 +33,9 @@ else:
     np.savez(opt_cache_path, a=a, b=b, C=C, centers=centers, labels_src=labels_src, labels_tar=labels_tar, src=src, tar=tar)
     print(f"  [cache] saved a,b,C to {opt_cache_path}")
 
-from Sinkhorn_L0 import Sinkhorn_l0_Newton
-solver = Sinkhorn_l0_Newton(C, 1e-1, a, b)
-X = solver.optimize(max_iter=300, tol=1e-11)
+from Sinkhorn_L0 import BISNsolver as BS
+solver = BS(C, 1e-2, a, b)
+X = solver.optimize(max_iter=300, tol=1e-9)
 
 
 solver = BISNsolver(C, 1e-2, a, b)

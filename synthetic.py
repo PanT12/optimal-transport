@@ -1,8 +1,8 @@
 from Alg.Algorithm_Import import *
 
 # ===== 固定超参 =====
-m = n = 10000
-cost_matrix_norm = "Uniform"  # "Square" or "Uniform"
+m = n = 5000
+cost_matrix_norm = "Square"  # "Square" or "Uniform"
 time_max = 10000.0
 eta = 1e-4 if cost_matrix_norm == "Square" else 1e-3
 tol = 1e-7
@@ -29,7 +29,7 @@ elif cost_matrix_norm == "Absolute":
 
 # ===== 算法注册表（先只启用你实现的；其它先注释或保持占位）=====
 ALGORITHMS = {
-    # "BISN": run_BISN,
+    "BISN": run_BISN,
     # "SSNS": run_ssns,
     # "ExtraGrad": run_extragradient,
     # "HOT": run_hot_halpern,

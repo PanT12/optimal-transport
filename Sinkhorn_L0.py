@@ -1,5 +1,3 @@
-import numpy as np
-from copy import deepcopy
 from Alg.base import *
 import math
 import timeit
@@ -7,8 +5,9 @@ import scipy.sparse as sp
 from scipy.sparse.linalg import LinearOperator, cg
 import matplotlib.pyplot as plt
 from scipy.special import logsumexp
+import warnings
 
-class Sinkhorn_l0_Newton(optimal_transport):
+class BISNsolver(optimal_transport):
     def __init__(self, *args, skip_first_stage=False, **kwargs):
         super().__init__(*args, **kwargs)
         self.cg_tol = 1e-11
@@ -34,9 +33,14 @@ class Sinkhorn_l0_Newton(optimal_transport):
         # row_sum = numerator.sum(axis=1, keepdims=True)
 
         exp_term = np.exp((g - np.max(g)) / self.eta)
-        numerator = np.maximum(fixed_term * exp_term, 1e-300)
-
+        # numerator = np.maximum(fixed_term * exp_term, 1e-300)
+        numerator = fixed_term * exp_term
         row_sum = numerator.sum(axis=1, keepdims=True)
+        if np.any(row_sum == 0.0):
+            warnings.warn("Updating P: A row in P has all zero entries. It is better to increase regularization parameter eta.")
+            zero_indices = np.where(row_sum == 0)[0]
+            numerator[zero_indices, :] = np.random.uniform(low=0.0, high=1.0, size=(len(zero_indices), self.n))
+            row_sum = numerator.sum(axis=1, keepdims=True)
 
         P = numerator / row_sum
         newX = P * self.a[:, None]
@@ -60,6 +64,11 @@ class Sinkhorn_l0_Newton(optimal_transport):
             exp_term = np.exp((y - np.max(y)) / self.eta)
             numerator = fixed_term * exp_term
             row_sum = numerator.sum(axis=1, keepdims=True)
+            if np.any(row_sum == 0.0):
+                warnings.warn("First phase: A row in P has all zero entries. It is better to increase regularization parameter eta.")
+                zero_indices = np.where(row_sum == 0)[0]
+                numerator[zero_indices, :] = np.random.uniform(low=0.0, high=1.0, size=(len(zero_indices), self.n))
+                row_sum = numerator.sum(axis=1, keepdims=True)
             w = (self.a / row_sum.squeeze(1))[:, None]  # (m,1)
 
             column_sum = (w * numerator).sum(axis=0)  # (n,)
@@ -82,7 +91,7 @@ class Sinkhorn_l0_Newton(optimal_transport):
         # plt.show()
         return g, P, newX, iter
 
-    def optimize(self, max_iter, tol, rho=None, time_max=np.inf, verbose=True, first_stage_tol=1e-3):
+    def optimize(self, max_iter, tol, rho=None, time_max=np.inf, verbose=True, first_stage_tol=1e-1):
         # initialization
         # X = np.ones((self.m, self.n)) * self.a[:, None] / self.n
         X = np.outer(self.a, self.b)
@@ -111,7 +120,7 @@ class Sinkhorn_l0_Newton(optimal_transport):
             else:
                 g, P, X, iter1 = self.accelerated_gradient(g, fixed_term, first_stage_tol, inner_iter=5000, stepsize=2*self.eta)
             # second-order method
-            g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(g, X, P, log_fixed_term, fixed_term, tol_inner, rho_=rho, inner_max_iter=1000)
+            g, X, P, cg_iter, cg_time, iter2 = self.Newton_sort(g, X, P, log_fixed_term, fixed_term, tol_inner, rho_=rho, inner_max_iter=30)
 
             t_end = timeit.default_timer()
             t_total += t_end - t_start
@@ -190,7 +199,8 @@ class Sinkhorn_l0_Newton(optimal_transport):
         # self.alpha_list.append(alpha_list)
         # self.loss_list.append(loss_list)
         # print("alpha mean is ", np.mean(alpha), "alpha std is ", np.std(alpha))
-
+        warnings.warn("Has reached maximum inner iterations in Newton's method. "
+                      "Perhaps increase inner_max_iter or increase regularization parameter eta.")
         return g, X, P, cg_iter, cg_time, inner_max_iter
 
     def check_matrix(self, mat):
@@ -206,12 +216,13 @@ class Sinkhorn_l0_Newton(optimal_transport):
         mask[self.argmax, :] = True
         P_sparse = P * mask
         # P_sparse[self.argmax, :] += 1e-30
-        row_sum = P_sparse.sum(axis=1, keepdims=True) # !!!!!
+        row_sum = P_sparse.sum(axis=1, keepdims=True)
+        if np.any(row_sum == 0.0):
+            warnings.warn("Updating P: A row in P has all zero entries. It is better to increase regularization parameter eta.")
+            zero_indices = np.where(row_sum == 0)[0]
+            P[zero_indices, :] = np.random.uniform(low=0.0, high=1.0, size=(len(zero_indices), self.n))
+            row_sum = P.sum(axis=1, keepdims=True)
         P_sparse = P_sparse / row_sum
-        # positive = self.check_matrix(np.array(mask))
-        # if not positive:
-        #     mask[0, :] = True
-        #     P_sparse[0, :] = P_sparse[0, :] * 0.95
         return mask, P_sparse
 
     def dual_obj_cal_normalize(self, g, log_fixed_term):
@@ -305,9 +316,9 @@ if __name__ == "__main__":
     import matplotlib.pyplot as plt
     import os
     m, n = 3, 3
-    eta = 1e-3
+    eta = 1e-2
     opt = None
-    np.random.seed(7)
+    # np.random.seed(1)
     a = np.random.rand(m)
     a = a / np.sum(a)  # [0.54100398 0.01455541 0.44444061]
     # print("a is ", a)
@@ -320,9 +331,9 @@ if __name__ == "__main__":
     C = (J[None, :] - J[:, None]) ** 2
     C = C / np.max(C)
 
-    guro = Gurobisolver(C, a, b)
-    gt = guro.Gurobi_Solver_original()
-    opt = np.sum(C * gt)
+    # guro = Gurobisolver(C, a, b)
+    # gt = guro.Gurobi_Solver_original()
+    # opt = np.sum(C * gt)
 
 
     # m = n = 5000
@@ -350,7 +361,7 @@ if __name__ == "__main__":
     #     C = np.abs(J[None, :] - J[:, None])
     #     C = C / np.max(C)
 
-    solver = Sinkhorn_l0_Newton(C=C, eta=1e-1, a=a, b=b, obj_truth=opt)
+    solver = BISNsolver(C=C, eta=eta, a=a, b=b, obj_truth=opt)
     X = solver.optimize(max_iter=300, tol=1e-11)
     X = solver._round_to_marginals(X, a, b)
 
